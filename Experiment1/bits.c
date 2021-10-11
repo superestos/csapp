@@ -319,7 +319,7 @@ int floatFloat2Int(unsigned uf) {
     return 1 << 31;
   }
 
-  int frac = (1 << 23) + (uf & ~(0x1ff << 23));
+  int frac = (1 << 23) + (uf & ~((0xff + (1 << 8)) << 23));
   int sign = uf & (1 << 31);
 
   if (exp >= 23) {
@@ -350,5 +350,7 @@ int floatFloat2Int(unsigned uf) {
  *   Rating: 4
  */
 unsigned floatPower2(int x) {
-    return 2;
+  
+
+  return 2;
 }
