@@ -50,3 +50,56 @@ init *(%ebp - 4) = 1; loop until *(%ebp - 4) == 5; *(%ebp - 4)++. Denote it as i
 %eax == %ecx
 
 1 2 6 24 120 720
+
+## phase 3
+
+ 8048bff:	83 ec 28             	sub    $0x28,%esp
+ 8048c02:	c7 45 f8 00 00 00 00 	movl   $0x0,-0x8(%ebp)
+ 8048c09:	c7 45 fc 00 00 00 00 	movl   $0x0,-0x4(%ebp)
+ 8048c10:	8d 45 f0             	lea    -0x10(%ebp),%eax
+ 8048c13:	89 44 24 0c          	mov    %eax,0xc(%esp)
+ 8048c17:	8d 45 f4             	lea    -0xc(%ebp),%eax
+ 8048c1a:	89 44 24 08          	mov    %eax,0x8(%esp)
+ 8048c1e:	c7 44 24 04 66 99 04 	movl   $0x8049966,0x4(%esp)
+ 8048c25:	08 
+ 8048c26:	8b 45 08             	mov    0x8(%ebp),%eax
+ 8048c29:	89 04 24             	mov    %eax,(%esp)
+ 8048c2c:	e8 37 fc ff ff       	call   8048868 <sscanf@plt>
+
+(gdb) x /s 0x8049966
+0x8049966:      "%d %d"
+
+scanf("%d %d", &a, &b);
+
+a in *(%ebp - 0xc) b in *(%ebp - 0x10)
+
+ 8048c3f:	8b 45 f4             	mov    -0xc(%ebp),%eax
+ 8048c42:	89 45 ec             	mov    %eax,-0x14(%ebp)
+ 8048c45:	83 7d ec 07          	cmpl   $0x7,-0x14(%ebp)
+ 8048c49:	77 54                	ja     8048c9f <phase_3+0xa3>
+
+ 8048c9f:	e8 b2 09 00 00       	call   8049656 <explode_bomb>
+
+*(%ebp - 0x14) = a < 7
+
+ 8048c4b:	8b 55 ec             	mov    -0x14(%ebp),%edx
+ 8048c4e:	8b 04 95 6c 99 04 08 	mov    0x804996c(,%edx,4),%eax
+ 8048c55:	ff e0                	jmp    *%eax
+
+jump to 0x804996c + 4 * a
+
+ 8048c57:	c7 45 f8 f0 01 00 00 	movl   $0x1f0,-0x8(%ebp)
+ 8048c5e:	eb 44                	jmp    8048ca4 <phase_3+0xa8>
+
+ 8048ca4:	8b 45 f0             	mov    -0x10(%ebp),%eax
+ 8048ca7:	39 45 f8             	cmp    %eax,-0x8(%ebp)
+ 8048caa:	74 05                	je     8048cb1 <phase_3+0xb5>
+
+b == *(%ebp - 8)
+
+(gdb) p /x *(int *)(0x804996c)
+$16 = 0x8048c57
+(gdb) p 0x1f0
+$18 = 496
+
+a = 0 b = 496
