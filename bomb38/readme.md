@@ -103,3 +103,24 @@ $16 = 0x8048c57
 $18 = 496
 
 a = 0 b = 496
+
+## phase 4
+
+scanf("%s", &a);
+a > 0
+func4(a) == 0x37 == 55
+
+func4(a) {
+    if (a > 1) {
+        b = func(a - 1)
+        a -= 2
+        b += func4(a)
+
+        return b
+    }
+    return 1
+}
+
+1 2 3 5 8 13 21 34 55
+func4(9) == 55
+
