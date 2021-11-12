@@ -124,3 +124,56 @@ func4(a) {
 1 2 3 5 8 13 21 34 55
 func4(9) == 55
 
+## phase 5
+
+ 8048d4f:	e8 11 03 00 00       	call   8049065 <string_length>
+ 8048d54:	89 45 fc             	mov    %eax,-0x4(%ebp)
+ 8048d57:	83 7d fc 06          	cmpl   $0x6,-0x4(%ebp)
+ 8048d5b:	74 05                	je     8048d62 <phase_5+0x1f>
+ 8048d5d:	e8 f4 08 00 00       	call   8049656 <explode_bomb>
+
+strlen(input) == 6
+
+ 8048d62:	c7 45 f8 00 00 00 00 	movl   $0x0,-0x8(%ebp)
+ 8048d69:	eb 20                	jmp    8048d8b <phase_5+0x48>
+
+ 8048d6b:	8b 55 f8             	mov    -0x8(%ebp),%edx
+ 8048d6e:	8b 45 f8             	mov    -0x8(%ebp),%eax
+ 8048d71:	03 45 08             	add    0x8(%ebp),%eax
+ 8048d74:	0f b6 00             	movzbl (%eax),%eax
+ 8048d77:	0f be c0             	movsbl %al,%eax
+ 8048d7a:	83 e0 0f             	and    $0xf,%eax
+ 8048d7d:	0f b6 80 c0 a5 04 08 	movzbl 0x804a5c0(%eax),%eax
+ 8048d84:	88 44 15 f1          	mov    %al,-0xf(%ebp,%edx,1)
+ 8048d88:	ff 45 f8             	incl   -0x8(%ebp)
+ 8048d8b:	83 7d f8 05          	cmpl   $0x5,-0x8(%ebp)
+ 8048d8f:	7e da                	jle    8048d6b <phase_5+0x28>
+
+i in *(%ebp - 0x8)
+for (i = 0; i <= 5; i++) {
+    a = input[i]
+    *(%ebp + i - 0xf) = *(0x804a5c0 + (a & 0xf))
+}
+
+ 8048d91:	c6 45 f7 00          	movb   $0x0,-0x9(%ebp)
+ 8048d95:	c7 44 24 04 8f 99 04 	movl   $0x804998f,0x4(%esp)
+ 8048d9c:	08 
+ 8048d9d:	8d 45 f1             	lea    -0xf(%ebp),%eax
+ 8048da0:	89 04 24             	mov    %eax,(%esp)
+ 8048da3:	e8 e7 02 00 00       	call   804908f <strings_not_equal>
+ 8048da8:	85 c0                	test   %eax,%eax
+ 8048daa:	74 05                	je     8048db1 <phase_5+0x6e>
+ 8048dac:	e8 a5 08 00 00       	call   8049656 <explode_bomb>
+ 8048db1:	c9                   	leave  
+ 8048db2:	c3                   	ret 
+
+compare input and *(%ebp - 0xf)
+
+(gdb) x /s 0x804998f
+0x804998f:      "giants"
+
+(gdb) x /s 0x804a5c0
+0x804a5c0 <array.2486>: "isrveawhobpnutfg\323\003"
+
+select 15 0 5 11 13 1
+o`ekma
