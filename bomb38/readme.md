@@ -177,3 +177,184 @@ compare input and *(%ebp - 0xf)
 
 select 15 0 5 11 13 1
 o`ekma
+
+## phase 6
+
+(gdb) x 0x804a63c
+0x804a63c <node0>:      0x00000000
+(gdb) x 0x804a63c + 8
+0x804a644 <node0+8>:    0x0804a630
+(gdb) x 0x804a630
+0x804a630 <node1>:      0x000000dc
+(gdb) x 0x804a630 + 8
+0x804a638 <node1+8>:    0x0804a624
+(gdb) x 0x804a624
+0x804a624 <node2>:      0x000000a7
+(gdb) x 0x804a624 + 8
+0x804a62c <node2+8>:    0x0804a618
+(gdb) x 0x804a618
+0x804a618 <node3>:      0x0000022e
+(gdb) x 0x804a618 + 8
+0x804a620 <node3+8>:    0x0804a60c
+(gdb) x 0x804a60c
+0x804a60c <node4>:      0x000000ac
+(gdb) x 0x804a60c + 8
+0x804a614 <node4+8>:    0x0804a600
+(gdb) x 0x804a600
+0x804a600 <node5>:      0x00000358
+(gdb) x 0x804a600 + 8
+0x804a608 <node5+8>:    0x0804a5f4
+(gdb) x 0x804a5f4
+0x804a5f4 <node6>:      0x0000032c
+(gdb) x 0x804a5f4 + 8
+0x804a5fc <node6+8>:    0x0804a5e8
+(gdb) x 0x804a5e8
+0x804a5e8 <node7>:      0x000001b8
+(gdb) x 0x804a5e8 + 8
+0x804a5f0 <node7+8>:    0x0804a5dc
+(gdb) x 0x804a5dc
+0x804a5dc <node8>:      0x000000c8
+(gdb) x 0x804a5dc + 8
+0x804a5e4 <node8+8>:    0x0804a5d0
+(gdb) x 0x804a5d0
+0x804a5d0 <node9>:      0x000003d3
+(gdb) x 0x804a5d0 + 8
+0x804a5d8 <node9+8>:    0x00000000
+
+ 8048e4d:	c7 45 f8 3c a6 04 08 	movl   $0x804a63c,-0x8(%ebp)
+ 8048e54:	8b 45 08             	mov    0x8(%ebp),%eax
+ 8048e57:	89 04 24             	mov    %eax,(%esp)
+ 8048e5a:	e8 f9 f9 ff ff       	call   8048858 <atoi@plt>
+ 8048e5f:	89 c2                	mov    %eax,%edx
+ 8048e61:	8b 45 f8             	mov    -0x8(%ebp),%eax
+ 8048e64:	89 10                	mov    %edx,(%eax)
+ 8048e66:	8b 45 f8             	mov    -0x8(%ebp),%eax
+ 8048e69:	89 04 24             	mov    %eax,(%esp)
+ 8048e6c:	e8 42 ff ff ff       	call   8048db3 <fun6>
+
+node0->val = atoi(input)
+p = fun6(node0)
+
+ 8048e71:	89 45 f8             	mov    %eax,-0x8(%ebp)
+ 8048e74:	8b 45 f8             	mov    -0x8(%ebp),%eax
+ 8048e77:	89 45 fc             	mov    %eax,-0x4(%ebp)
+ 8048e7a:	c7 45 f4 01 00 00 00 	movl   $0x1,-0xc(%ebp)
+ 8048e81:	eb 0c                	jmp    8048e8f <phase_6+0x48>
+
+ 8048e83:	8b 45 fc             	mov    -0x4(%ebp),%eax
+ 8048e86:	8b 40 08             	mov    0x8(%eax),%eax
+ 8048e89:	89 45 fc             	mov    %eax,-0x4(%ebp)
+ 8048e8c:	ff 45 f4             	incl   -0xc(%ebp)
+ 8048e8f:	83 7d f4 04          	cmpl   $0x4,-0xc(%ebp)
+ 8048e93:	7e ee                	jle    8048e83 <phase_6+0x3c>
+
+for (i = 1; i <= 4; i++) {
+    p = p->next
+}
+
+ 8048e95:	8b 45 fc             	mov    -0x4(%ebp),%eax
+ 8048e98:	8b 10                	mov    (%eax),%edx
+ 8048e9a:	a1 3c a6 04 08       	mov    0x804a63c,%eax
+ 8048e9f:	39 c2                	cmp    %eax,%edx
+ 8048ea1:	74 05                	je     8048ea8 <phase_6+0x61>
+ 8048ea3:	e8 ae 07 00 00       	call   8049656 <explode_bomb>
+ 8048ea8:	c9                   	leave  
+ 8048ea9:	c3                   	ret  
+
+p == 0x804a63c
+
+fun6:
+
+ 8048e3c:	83 7d f4 00          	cmpl   $0x0,-0xc(%ebp)
+ 8048e40:	75 98                	jne    8048dda <fun6+0x27>
+
+
+-0x10(%ebp) head
+-0xc(%ebp)  p
+-0x8(%ebp)  prev
+-0x4(%ebp)  q
+
+head = input
+p = input->next
+head->next = NULL
+goto L7
+
+L1:
+q = head
+prev = head
+goto L3
+
+L2:
+prev = q
+q = q->next
+L3:
+if (q == NULL) {
+    goto L4
+}
+if (q->val < p->val) {
+    goto L2
+}
+
+L4:
+if (prev == q) {
+    goto L5
+}
+prev->next = p
+goto L6
+
+L5:
+head = p
+
+L6:
+prev = p->next
+p->next = q
+p = prev
+
+L7:
+if (p != NULL) {
+    goto L1
+}
+
+return head
+
+fun6(input) {
+    head = input
+    p = input->next
+    input->next = NULL
+
+    while (p != NULL) {
+        q = head
+        prev = head
+
+        while (q->val < p->val) {
+            prev = q
+            q = q->next
+
+            if (q == NULL) {
+                break
+            }
+        }
+
+        if (prev == q) {
+            head = p
+        }
+        else {
+            prev->next = p
+        }
+
+        prev = p->next
+        p->next = q
+        p = prev
+    }
+
+    return head
+}
+
+0dc 0a7 22e 0ac 358 32c 1b8 3d3 0c8 3d3
+sorted
+0a7 0ac 0c8 0dc 1b8 22e
+
+we choose 0x200, which between 1b8 and 22e
+
+
+
