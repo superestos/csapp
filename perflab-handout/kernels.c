@@ -4,19 +4,20 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 #include "defs.h"
 
 /* 
  * Please fill in the following team struct 
  */
 team_t team = {
-    "bovik",              /* Team name */
+    " ",              /* Team name */
 
-    "Harry Q. Bovik",     /* First member full name */
-    "bovik@nowhere.edu",  /* First member email address */
+    " ",     /* First member full name */
+    " ",  /* First member email address */
 
-    "",                   /* Second member full name (leave blank if none) */
-    ""                    /* Second member email addr (leave blank if none) */
+    " ",                   /* Second member full name (leave blank if none) */
+    " "                    /* Second member email addr (leave blank if none) */
 };
 
 /***************
@@ -47,7 +48,20 @@ void naive_rotate(int dim, pixel *src, pixel *dst)
 char rotate_descr[] = "rotate: Current working version";
 void rotate(int dim, pixel *src, pixel *dst) 
 {
-    naive_rotate(dim, src, dst);
+    int i, j, m, n;
+    int block_size = 16;
+    assert(dim % block_size == 0);
+
+    for (i = 0; i < dim; i += block_size) {
+        for (j = 0; j < dim; j += block_size) {            
+
+            for (n = 0; n < block_size; n++) {
+                for (m = 0; m < block_size; m++) {
+                    dst[RIDX(dim-1-(j+n), i+m, dim)] = src[RIDX(i+m, j+n, dim)];
+                }
+            }
+        }
+    }
 }
 
 /*********************************************************************
@@ -156,6 +170,21 @@ void naive_smooth(int dim, pixel *src, pixel *dst)
 	    dst[RIDX(i, j, dim)] = avg(dim, i, j, src);
 }
 
+static pixel avg_center(int dim, int i, int j, pixel *src) 
+{
+    int ii, jj;
+    pixel_sum sum;
+    pixel current_pixel;
+
+    initialize_pixel_sum(&sum);
+    for(ii = i - 1; ii <= i + 1; ii++) 
+	for(jj = j - 1; jj <= j + 1; jj++) 
+	    accumulate_sum(&sum, src[RIDX(ii, jj, dim)]);
+
+    assign_sum_to_pixel(&current_pixel, sum);
+    return current_pixel;
+}
+
 /*
  * smooth - Your current working version of smooth. 
  * IMPORTANT: This is the version you will be graded on
@@ -163,7 +192,23 @@ void naive_smooth(int dim, pixel *src, pixel *dst)
 char smooth_descr[] = "smooth: Current working version";
 void smooth(int dim, pixel *src, pixel *dst) 
 {
-    naive_smooth(dim, src, dst);
+    int i, j;
+
+    for (i = 0; i < dim; i++) {
+        dst[RIDX(i, 0, dim)] = avg(dim, i, 0, src);
+        dst[RIDX(i, dim - 1, dim)] = avg(dim, i, dim - 1, src);
+    }
+
+    for (i = 1; i < dim - 1; i++) {
+        dst[RIDX(0, i, dim)] = avg(dim, 0, i, src);
+        dst[RIDX(dim - 1, i, dim)] = avg(dim, dim - 1, i, src);
+    }
+
+    for (i = 1; i < dim - 1; i++) {
+        for (j = 1; j < dim - 1; j++) {
+            dst[RIDX(i, j, dim)] = avg_center(dim, i, j, src);
+        }
+    }
 }
 
 
