@@ -1,7 +1,5 @@
 /*
- * memlib.c - a module that simulates the memory system.  Needed because it 
- *            allows us to interleave calls from the student's malloc package 
- *            with the system's malloc package in libc.
+ * memlib.c - bridge to mmap
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,87 +7,47 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <string.h>
+#include <inttypes.h>
 #include <errno.h>
 
 #include "memlib.h"
-#include "config.h"
+#include "pagemap.h"
 
 /* private variables */
-static char *mem_start_brk;  /* points to first byte of heap */
-static char *mem_brk;        /* points to last byte of heap */
-static char *mem_max_addr;   /* largest legal heap address */ 
+static int activity_counter = 0; /* to simulate other processes */
+
+static int page_count;
 
 /* 
  * mem_init - initialize the memory system model
  */
 void mem_init(void)
 {
-    /* allocate the storage we will use to model the available VM */
-    if ((mem_start_brk = (char *)malloc(MAX_HEAP)) == NULL) {
-	fprintf(stderr, "mem_init_vm: malloc error\n");
-	exit(1);
-    }
+  size_t page_size = (size_t)getpagesize();
+  if (APAGE_SIZE != page_size) {
+    fprintf(stderr, "configuration error: APAGE_SIZE does not match %ld\n",
+            page_size);
+    abort();
+  }
+}
 
-    mem_max_addr = mem_start_brk + MAX_HEAP;  /* max legal heap address */
-    mem_brk = mem_start_brk;                  /* heap is empty initially */
+static void unmap(void *p)
+{
+  if (munmap(p, APAGE_SIZE) < 0) {
+    fprintf(stderr, "unexpected error in munmap: %s (%d)\n",
+            strerror(errno), errno);
+    abort();
+  }
 }
 
 /* 
  * mem_deinit - free the storage used by the memory system model
  */
-void mem_deinit(void)
+void mem_reset(void)
 {
-    free(mem_start_brk);
-}
-
-/*
- * mem_reset_brk - reset the simulated brk pointer to make an empty heap
- */
-void mem_reset_brk()
-{
-    mem_brk = mem_start_brk;
-}
-
-/* 
- * mem_sbrk - simple model of the sbrk function. Extends the heap 
- *    by incr bytes and returns the start address of the new area. In
- *    this model, the heap cannot be shrunk.
- */
-void *mem_sbrk(int incr) 
-{
-    char *old_brk = mem_brk;
-
-    if ( (incr < 0) || ((mem_brk + incr) > mem_max_addr)) {
-	errno = ENOMEM;
-	fprintf(stderr, "ERROR: mem_sbrk failed. Ran out of memory...\n");
-	return (void *)-1;
-    }
-    mem_brk += incr;
-    return (void *)old_brk;
-}
-
-/*
- * mem_heap_lo - return address of the first heap byte
- */
-void *mem_heap_lo()
-{
-    return (void *)mem_start_brk;
-}
-
-/* 
- * mem_heap_hi - return address of last heap byte
- */
-void *mem_heap_hi()
-{
-    return (void *)(mem_brk - 1);
-}
-
-/*
- * mem_heapsize() - returns the heap size in bytes
- */
-size_t mem_heapsize() 
-{
-    return (size_t)(mem_brk - mem_start_brk);
+  pagemap_for_each(unmap);
+  page_count = 0;
+  activity_counter = 0;
 }
 
 /*
@@ -97,5 +55,79 @@ size_t mem_heapsize()
  */
 size_t mem_pagesize()
 {
-    return (size_t)getpagesize();
+  return APAGE_SIZE;
+}
+
+size_t mem_heapsize(void)
+{
+  return APAGE_SIZE * page_count;
+}
+
+
+void *mem_map(size_t sz)
+{
+  void *p;
+  size_t i;
+  
+  if (sz & (APAGE_SIZE - 1)) {
+    fprintf(stderr, "mem_map: requested size is not a multiple of %d: %ld\n",
+            APAGE_SIZE, sz);
+    abort();
+  }
+
+  activity_counter++;
+  if ((activity_counter & (activity_counter - 1)) == 0) {
+    /* allocate a page to ensure that mem_map results are not
+       always sequential */
+    mmap(0, APAGE_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+  }
+
+  p = mmap(0, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+  if (p == MAP_FAILED) {
+    fprintf(stderr, "mmap failed: %s (%d)\n",
+            strerror(errno), errno);
+    abort();
+  }
+
+  for (i = 0; i < sz; i += APAGE_SIZE) {
+    pagemap_modify(p + i, 1);
+    page_count++;
+  }
+  
+  return p;
+}
+
+void mem_unmap(void *p, size_t sz)
+{
+  size_t i;
+  
+  if (((uintptr_t)p) & (APAGE_SIZE - 1)) {
+    fprintf(stderr, "mem_unmap: given address is not page-aligned: %p\n",
+            p);
+    abort();
+  }
+
+  if (sz & (APAGE_SIZE - 1)) {
+    fprintf(stderr, "mem_unmap: given size is not a multiple of %d: %ld\n",
+            APAGE_SIZE, sz);
+    abort();
+  }
+  
+  for (i = 0; i < sz; i += APAGE_SIZE) {
+    if (!pagemap_is_mapped(p+i)) {
+      fprintf(stderr, "mem_unmap: given page is not mapped: %p (in %p:%p)\n",
+              p + i, p, p + sz);
+      abort();
+    }      
+
+    pagemap_modify(p + i, 0);
+    
+    --page_count;
+  }
+
+  if (munmap(p, sz) < 0) {
+    fprintf(stderr, "munmap failed: %s (%d)\n",
+            strerror(errno), errno);
+    abort();
+  }
 }

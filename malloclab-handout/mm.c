@@ -1,10 +1,9 @@
 /*
- * mm-naive.c - The fastest, least memory-efficient malloc package.
+ * mm-naive.c - The least memory-efficient malloc package.
  * 
- * In this naive approach, a block is allocated by simply incrementing
- * the brk pointer.  A block is pure payload. There are no headers or
- * footers.  Blocks are never coalesced or reused. Realloc is
- * implemented directly using mm_malloc and mm_free.
+ * In this naive approach, a block is allocated by allocating a
+ * new page as needed.  A block is pure payload. There are no headers or
+ * footers.  Blocks are never coalesced or reused.
  *
  * NOTE TO STUDENTS: Replace this header comment with your own header
  * comment that gives a high level description of your solution.
@@ -13,58 +12,55 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <unistd.h>
+#include <string.h>
 
 #include "mm.h"
 #include "memlib.h"
 
-/*********************************************************
- * NOTE TO STUDENTS: Before you do anything else, please
- * provide your team information in the following struct.
- ********************************************************/
-team_t team = {
-    /* Team name */
-    "",
-    /* First member's full name */
-    "",
-    /* First member's email address */
-    "",
-    /* Second member's full name (leave blank if none) */
-    "",
-    /* Second member's email address (leave blank if none) */
-    ""
-};
-
-/* single word (4) or double word (8) alignment */
-#define ALIGNMENT 8
+/* always use 16-byte alignment */
+#define ALIGNMENT 16
 
 /* rounds up to the nearest multiple of ALIGNMENT */
-#define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
+#define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~(ALIGNMENT-1))
 
+/* rounds up to the nearest multiple of mem_pagesize() */
+#define PAGE_ALIGN(size) (((size) + (mem_pagesize()-1)) & ~(mem_pagesize()-1))
 
-#define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
+void *current_avail = NULL;
+int current_avail_size = 0;
 
 /* 
  * mm_init - initialize the malloc package.
  */
 int mm_init(void)
 {
-    return 0;
+  current_avail = NULL;
+  current_avail_size = 0;
+  
+  return 0;
 }
 
 /* 
- * mm_malloc - Allocate a block by incrementing the brk pointer.
- *     Always allocate a block whose size is a multiple of the alignment.
+ * mm_malloc - Allocate a block by using bytes from current_avail,
+ *     grabbing a new page if necessary.
  */
 void *mm_malloc(size_t size)
 {
-    int newsize = ALIGN(size + SIZE_T_SIZE);
-    void *p = mem_sbrk(newsize);
-    if ((int)p < 0)
-	return NULL;
-    else {
-        *(size_t *)p = size;
-        return (void *)((char *)p + SIZE_T_SIZE);
-    }
+  int newsize = ALIGN(size);
+  void *p;
+  
+  if (current_avail_size < newsize) {
+    current_avail_size = PAGE_ALIGN(newsize);
+    current_avail = mem_map(current_avail_size);
+    if (current_avail == NULL)
+      return NULL;
+  }
+
+  p = current_avail;
+  current_avail += newsize;
+  current_avail_size -= newsize;
+  
+  return p;
 }
 
 /*
@@ -73,37 +69,3 @@ void *mm_malloc(size_t size)
 void mm_free(void *ptr)
 {
 }
-
-/*
- * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
- */
-void *mm_realloc(void *ptr, size_t size)
-{
-    void *oldptr = ptr;
-    void *newptr;
-    size_t copySize;
-    
-    newptr = mm_malloc(size);
-    if (newptr == NULL)
-      return NULL;
-    copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
-    if (size < copySize)
-      copySize = size;
-    memcpy(newptr, oldptr, copySize);
-    mm_free(oldptr);
-    return newptr;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
