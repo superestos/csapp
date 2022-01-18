@@ -29,15 +29,99 @@
 void *current_avail = NULL;
 int current_avail_size = 0;
 
+struct memblock {
+  size_t size;
+  struct memblock *prev;
+  struct memblock *next;
+};
+
+struct memblock *head;
+
 /* 
  * mm_init - initialize the malloc package.
  */
 int mm_init(void)
 {
-  current_avail = NULL;
-  current_avail_size = 0;
+  //current_avail = NULL;
+  //current_avail_size = 0;
+
+  head = NULL;
   
   return 0;
+}
+
+size_t real_size(size_t size) {
+  assert(size % 8 == 0);
+
+  if (size < 32) {
+    return 0;
+  }
+
+  return size - sizeof(struct memblock);
+}
+
+size_t padding_size(size_t size) {
+  size_t alignment = 16;
+  size_t padding = 8;
+
+  return ((size + padding - 1) & ~(alignment - 1)) + padding;
+}
+
+size_t paging_size(size_t size) {
+  size_t metadata_size = sizeof(struct memblock);
+
+  return (size + metadata_size + mem_pagesize() - 1) & ~(mem_pagesize() - 1);
+}
+
+struct memblock *create_memblock(void *mem, size_t block_size) {
+  struct memblock *block = (struct memblock *)mem;
+
+  size_t size = real_size(block_size);
+  if (size == 0) {
+    return NULL;
+  }
+
+  block->size = size;
+  block->next = NULL;
+  block->prev = NULL;
+
+  return block;
+}
+
+struct memblock *trim_memblock(struct memblock *block, size_t size) {
+  struct memblock *remain_block = create_memblock(((void *)block) + size + 24, block->size - size);
+
+  if (remain_block != NULL) {
+    block->size = size;
+  }
+
+  return remain_block;
+}
+
+void add_memblock(struct memblock *block) {
+  if (block == NULL)
+    return;
+
+  block->next = head;
+  if (head != NULL) {
+    head->prev = block;
+  }
+
+  head = block;
+}
+
+void delete_memblock(struct memblock *block) {
+  if (block == NULL)
+    return;
+  
+  if (block->prev != NULL)
+    block->prev->next = block->next;
+  if (block->next != NULL)
+    block->next->prev = block->prev;
+
+  if (head == block) {
+    head = block->next;
+  }
 }
 
 /* 
@@ -46,21 +130,30 @@ int mm_init(void)
  */
 void *mm_malloc(size_t size)
 {
-  int newsize = ALIGN(size);
-  void *p;
-  
-  if (current_avail_size < newsize) {
-    current_avail_size = PAGE_ALIGN(newsize);
-    current_avail = mem_map(current_avail_size);
-    if (current_avail == NULL)
-      return NULL;
+  size_t newsize = padding_size(size);
+
+  struct memblock *p = head;
+  for (; p != NULL; p = p->next) {
+    if (p->size > newsize) {
+      break;
+    }
   }
 
-  p = current_avail;
-  current_avail += newsize;
-  current_avail_size -= newsize;
+  if (p == NULL) {
+    size_t page_size = paging_size(newsize);
+    void *mem = mem_map(page_size);
+    if (mem == NULL)
+      return NULL;
   
-  return p;
+    p = create_memblock(mem, page_size);
+  }
+  else {
+    delete_memblock(p);
+  }
+
+  add_memblock(trim_memblock(p, newsize));
+
+  return ((void *)p + 16);
 }
 
 /*
@@ -68,4 +161,5 @@ void *mm_malloc(size_t size)
  */
 void mm_free(void *ptr)
 {
+  //add_memblock((struct memblock *)(ptr - 16));
 }
