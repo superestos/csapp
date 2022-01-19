@@ -17,6 +17,8 @@
 #include "mm.h"
 #include "memlib.h"
 
+#define HEADER_SIZE 8
+
 /* always use 16-byte alignment */
 #define ALIGNMENT 16
 
@@ -42,22 +44,16 @@ struct memblock *head;
  */
 int mm_init(void)
 {
-  //current_avail = NULL;
-  //current_avail_size = 0;
-
   head = NULL;
-  
   return 0;
 }
 
 size_t real_size(size_t size) {
-  return size > 16? size - 16: 0;
+  return size > ALIGNMENT? size - ALIGNMENT: 0;
 }
 
 size_t padding_size(size_t size) {
-  size_t alignment = 16;
-
-  return (size + alignment - 1) & ~(alignment - 1);
+  return (size + ALIGNMENT - 1) & ~(ALIGNMENT - 1);
 }
 
 size_t paging_size(size_t size) {
@@ -67,8 +63,7 @@ size_t paging_size(size_t size) {
 }
 
 size_t memblock_length(struct memblock *block) {
-  size_t mask = 0x7;
-  return block->size & ~mask;
+  return block->size & ~(ALIGNMENT - 1);
 }
 
 size_t memblock_alloc(struct memblock *block) {
@@ -76,11 +71,10 @@ size_t memblock_alloc(struct memblock *block) {
 }
 
 void set_header(struct memblock *block, size_t block_size, size_t alloc) {
-  size_t mask = 0x7;
-  size_t size = block_size & ~mask;
+  size_t size = block_size & ~(ALIGNMENT - 1);
 
   block->size = (alloc & 1) | size;
-  struct memblock *end = (struct memblock *)(((void *)block) + size - 8);
+  struct memblock *end = (struct memblock *)(((void *)block) + size - HEADER_SIZE);
   end->size = block->size;
 }
 
@@ -113,8 +107,6 @@ void add_memblock(struct memblock *block) {
   if (block == NULL)
     return;
 
-  //assert(!memblock_alloc(block));
-
   block->next = head;
   block->prev = NULL;
   if (head != NULL) {
@@ -138,6 +130,26 @@ void delete_memblock(struct memblock *block) {
   }
 }
 
+struct memblock *search(size_t block_size) {
+  struct memblock *result = NULL;
+  size_t min;
+
+  struct memblock *p = head;
+  for (; p != NULL; p = p->next) {
+    if (memblock_length(p) > block_size) {
+      if (result == NULL || min > memblock_length(p)) {
+        result = p;
+        min = memblock_length(p);
+      }
+    }
+    else if (memblock_length(p) == block_size) {
+      return p;
+    }
+  }
+
+  return result;
+}
+
 /* 
  * mm_malloc - Allocate a block by using bytes from current_avail,
  *     grabbing a new page if necessary.
@@ -146,26 +158,19 @@ void *mm_malloc(size_t size)
 {
   size = padding_size(size);
 
-  size_t block_size = size + 16;
+  size_t block_size = size + ALIGNMENT;
 
-  struct memblock *p = head;
-  for (; p != NULL; p = p->next) {
-    if (memblock_length(p) >= block_size) {
-      break;
-    }
-  }
+  struct memblock *p = search(block_size);  
 
   if (p == NULL) {
-    size_t sentinel_size = 8;
-
-    size_t page_size = paging_size(block_size + sentinel_size * 2);
+    size_t page_size = paging_size(block_size + ALIGNMENT);
     void *mem = mem_map(page_size);
     if (mem == NULL)
       return NULL;
 
     set_header((struct memblock *)mem, page_size, 1);
 
-    p = create_memblock(mem + sentinel_size, page_size - sentinel_size * 2);
+    p = create_memblock(mem + HEADER_SIZE, page_size - ALIGNMENT);
   }
   else {
     delete_memblock(p);
@@ -174,12 +179,16 @@ void *mm_malloc(size_t size)
   add_memblock(trim_memblock(p, block_size));
 
   set_header(p, p->size, 1);
-  return ((void *)p + 8);
+  return ((void *)p + HEADER_SIZE);
 }
 
+/*
+ * mm_free - Freeing a block does nothing.
+ */
+void mm_free(void *ptr)
+{
+  struct memblock *block = (struct memblock *)(ptr - HEADER_SIZE);
 
-void coalesce(struct memblock *block) {
-  
   struct memblock *succ = (struct memblock *)(((void *)block) + memblock_length(block));
   if (!memblock_alloc(succ)) {
     delete_memblock(succ);
@@ -187,7 +196,7 @@ void coalesce(struct memblock *block) {
   }
   
   
-  struct memblock *prev = (struct memblock *)(((void *)block) - 8);
+  struct memblock *prev = (struct memblock *)(((void *)block) - HEADER_SIZE);
   if (!memblock_alloc(prev)) {
     prev = (struct memblock *)(((void *)block) - memblock_length(prev));
     set_header(prev, prev->size + block->size, 0);
@@ -196,14 +205,4 @@ void coalesce(struct memblock *block) {
   
   set_header(block, block->size, 0);
   add_memblock(block);
-}
-
-/*
- * mm_free - Freeing a block does nothing.
- */
-void mm_free(void *ptr)
-{
-  
-  //add_memblock((struct memblock *)(ptr - 8));
-  coalesce((struct memblock *)(ptr - 8));
 }
