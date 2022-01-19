@@ -67,18 +67,20 @@ size_t paging_size(size_t size) {
 }
 
 size_t memblock_length(struct memblock *block) {
-  return block->size & ~0x7;
+  size_t mask = 0x7;
+  return block->size & ~mask;
 }
 
 size_t memblock_alloc(struct memblock *block) {
   return block->size & 1;
 }
 
-void set_header(struct memblock *block, size_t size, size_t alloc) {
-  size = size & 0x7;
+void set_header(struct memblock *block, size_t block_size, size_t alloc) {
+  size_t mask = 0x7;
+  size_t size = block_size & ~mask;
 
   block->size = (alloc & 1) | size;
-  struct memblock *end = (struct memblock *)(((void *)block) + size);
+  struct memblock *end = (struct memblock *)(((void *)block) + size - 8);
   end->size = block->size;
 }
 
@@ -97,11 +99,11 @@ struct memblock *create_memblock(void *mem, size_t block_size) {
   return block;
 }
 
-struct memblock *trim_memblock(struct memblock *block, size_t size) {
-  struct memblock *remain_block = create_memblock(((void *)block) + size + 16, memblock_length(block) - size);
+struct memblock *trim_memblock(struct memblock *block, size_t block_size) {
+  struct memblock *remain_block = create_memblock(((void *)block) + block_size, memblock_length(block) - block_size);
 
   if (remain_block != NULL) {
-    set_header(block, size + 16, 0);
+    set_header(block, block_size, 0);
   }
 
   return remain_block;
@@ -114,6 +116,7 @@ void add_memblock(struct memblock *block) {
   //assert(!memblock_alloc(block));
 
   block->next = head;
+  block->prev = NULL;
   if (head != NULL) {
     head->prev = block;
   }
@@ -129,6 +132,9 @@ void delete_memblock(struct memblock *block) {
 
   if (head == block) {
     head = block->next;
+
+    if (head != NULL)
+      head->prev = NULL;
   }
 }
 
@@ -138,30 +144,34 @@ void delete_memblock(struct memblock *block) {
  */
 void *mm_malloc(size_t size)
 {
-  size_t newsize = padding_size(size);
+  size = padding_size(size);
+
+  size_t block_size = size + 16;
 
   struct memblock *p = head;
   for (; p != NULL; p = p->next) {
-    if (memblock_length(p) >= newsize + 16) {
+    if (memblock_length(p) >= block_size) {
       break;
     }
   }
 
   if (p == NULL) {
-    size_t page_size = paging_size(newsize);
+    size_t sentinel_size = 8;
+
+    size_t page_size = paging_size(block_size + sentinel_size * 2);
     void *mem = mem_map(page_size);
     if (mem == NULL)
       return NULL;
 
-    set_header((struct memblock *)mem, page_size - 16, 1);
+    set_header((struct memblock *)mem, page_size, 1);
 
-    p = create_memblock(mem + 8, page_size - 16);
+    p = create_memblock(mem + sentinel_size, page_size - sentinel_size * 2);
   }
   else {
     delete_memblock(p);
   }
 
-  add_memblock(trim_memblock(p, newsize));
+  add_memblock(trim_memblock(p, block_size));
 
   set_header(p, p->size, 1);
   return ((void *)p + 8);
@@ -169,23 +179,22 @@ void *mm_malloc(size_t size)
 
 
 void coalesce(struct memblock *block) {
-  set_header(block, block->size, 0);
-
+  
   struct memblock *succ = (struct memblock *)(((void *)block) + memblock_length(block));
   if (!memblock_alloc(succ)) {
     delete_memblock(succ);
     set_header(block, block->size + succ->size, 0);
   }
   
-  /*
+  
   struct memblock *prev = (struct memblock *)(((void *)block) - 8);
   if (!memblock_alloc(prev)) {
     prev = (struct memblock *)(((void *)block) - memblock_length(prev));
     set_header(prev, prev->size + block->size, 0);
     return;
   }
-  */
-
+  
+  set_header(block, block->size, 0);
   add_memblock(block);
 }
 
@@ -195,6 +204,6 @@ void coalesce(struct memblock *block) {
 void mm_free(void *ptr)
 {
   
-  add_memblock((struct memblock *)(ptr - 8));
-  //coalesce((struct memblock *)(ptr - 8));
+  //add_memblock((struct memblock *)(ptr - 8));
+  coalesce((struct memblock *)(ptr - 8));
 }
